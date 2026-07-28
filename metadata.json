@@ -1,0 +1,6 @@
+{
+  "name": "Solar EPC Hardware Inventory Manager",
+  "description": "Solar EPC Balance of System (BOS) hardware inventory management system, offline PDF gate pass parser, and PRD JSON generator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
