@@ -270,6 +270,16 @@ export default function App() {
   };
 
   const handleClearAuditLogs = () => {
+    const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
+    if (!isAdmin) {
+      toast({
+        type: 'warning',
+        title: 'ACCESS RESTRICTED',
+        description: 'Only System Administrators are authorized to clear audit logs.'
+      });
+      return;
+    }
+
     fetch('/api/db/audit-logs', { method: 'DELETE' }).catch(() => {});
     if (isSupabaseConfigured()) {
       clearSupabaseAuditLogs().catch(() => {});
@@ -284,6 +294,16 @@ export default function App() {
   };
 
   const handleDeleteSingleAuditLog = (index: number) => {
+    const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
+    if (!isAdmin) {
+      toast({
+        type: 'warning',
+        title: 'ACCESS RESTRICTED',
+        description: 'Only System Administrators are authorized to delete audit log entries.'
+      });
+      return;
+    }
+
     fetch(`/api/db/audit-logs/${index}`, { method: 'DELETE' })
       .then((res) => res.json())
       .then((data) => {
@@ -309,6 +329,7 @@ export default function App() {
         localStorage.setItem('solar_epc_audit_logs', JSON.stringify(updated));
       });
   };
+
 
   const handleSaveItem = (savedItem: InventoryItem) => {
     const existingIdx = inventory.findIndex((i) => i.item_id === savedItem.item_id);

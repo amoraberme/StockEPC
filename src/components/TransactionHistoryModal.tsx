@@ -129,6 +129,8 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
     });
   }, [logs, activeFilterTab, searchFilter]);
 
+  const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
+
   return (
     <div id="transaction-history-view" className="space-y-4 font-sans">
       {/* View Header */}
@@ -162,13 +164,13 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
               </Button>
             )}
 
-            {(onClearLogs || currentUser?.username === 'admin' || currentUser?.role === 'System Administrator') && logs.length > 0 && (
+            {isAdmin && logs.length > 0 && onClearLogs && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   if (window.confirm('Are you sure you want to clear all audit logs permanently?')) {
-                    onClearLogs?.();
+                    onClearLogs();
                   }
                 }}
                 className="flex items-center space-x-1.5 font-bold text-xs rounded-xl bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 cursor-pointer"
@@ -283,22 +285,23 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
                     <Calendar className="w-3.5 h-3.5 text-zinc-400" />
                     <span>{new Date(log.inventory_event.timestamp).toLocaleString()}</span>
                   </div>
-                  {(onDeleteLog || currentUser?.username === 'admin' || currentUser?.role === 'System Administrator') && (
+                  {isAdmin && onDeleteLog && (
                     <button
                       type="button"
                       onClick={() => {
                         if (window.confirm('Delete this audit log entry?')) {
-                          onDeleteLog?.(idx);
+                          onDeleteLog(idx);
                         }
                       }}
                       className="p-1 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                      title="Delete audit entry"
+                      title="Delete audit entry (Admin only)"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
               </div>
+
 
               {/* Notes Banner if present */}
               {log.inventory_event.notes && (
