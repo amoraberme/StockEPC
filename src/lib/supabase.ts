@@ -41,12 +41,37 @@ export async function fetchSupabaseInventory(): Promise<InventoryItem[] | null> 
   }
 }
 
+export function mapItemToDbPayload(item: InventoryItem) {
+  return {
+    item_id: item.item_id,
+    brand_manufacturer: item.brand_manufacturer || 'Standard EPC',
+    category: item.category,
+    model_number: item.model_number || 'N/A',
+    item_description: item.item_description,
+    quantity: Number(item.quantity || 0),
+    uom: item.uom || 'PCS',
+    technical_specs: item.technical_specs || {},
+    stock_levels: item.stock_levels || {
+      current_stock: Number(item.quantity || 0),
+      allocated_stock: 0,
+      reorder_threshold: 10,
+      low_stock_alert: false
+    },
+    serial_numbers: Array.isArray(item.serial_numbers) ? item.serial_numbers : [],
+    image_url: item.image_url || null,
+    added_by: item.added_by || null,
+    added_by_username: item.added_by_username || null,
+    updated_at: new Date().toISOString()
+  };
+}
+
 export async function saveSingleSupabaseItem(item: InventoryItem): Promise<boolean> {
   if (!supabase) return false;
   try {
+    const payload = mapItemToDbPayload(item);
     const { error } = await supabase
       .from('inventory_items')
-      .upsert([item], { onConflict: 'item_id' });
+      .upsert([payload], { onConflict: 'item_id' });
 
     if (error) {
       console.warn('Supabase upsert single item error:', error.message);
@@ -63,9 +88,10 @@ export async function saveSupabaseInventory(inventory: InventoryItem[]): Promise
   if (!supabase) return false;
   if (inventory.length === 0) return true;
   try {
+    const payloads = inventory.map(mapItemToDbPayload);
     const { error } = await supabase
       .from('inventory_items')
-      .upsert(inventory, { onConflict: 'item_id' });
+      .upsert(payloads, { onConflict: 'item_id' });
 
     if (error) {
       console.warn('Supabase upsert inventory error:', error.message);
@@ -77,6 +103,7 @@ export async function saveSupabaseInventory(inventory: InventoryItem[]): Promise
     return false;
   }
 }
+
 
 
 export async function deleteSupabaseItem(itemId: string): Promise<boolean> {
