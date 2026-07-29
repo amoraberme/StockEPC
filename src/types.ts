@@ -55,7 +55,10 @@ export interface InventoryItem {
   stock_levels: StockLevels;
   serial_numbers: string[];
   image_url?: string;
+  added_by?: string;
+  added_by_username?: string;
 }
+
 
 export interface UserProfile {
   id: string;

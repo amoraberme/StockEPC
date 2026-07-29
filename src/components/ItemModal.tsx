@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { InventoryItem, CategoryType, UOMType, TechnicalSpecs } from '../types';
+import { InventoryItem, CategoryType, UOMType, TechnicalSpecs, UserProfile } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { X, Box, Save, Zap, Info, CheckCircle2, Image, Upload, Link as LinkIcon, Camera } from 'lucide-react';
@@ -10,7 +10,9 @@ interface ItemModalProps {
   onClose: () => void;
   onSave: (item: InventoryItem) => void;
   existingItem?: InventoryItem | null;
+  currentUser?: UserProfile | null;
 }
+
 
 interface CategoryConfig {
   label: string;
@@ -189,7 +191,8 @@ export const ItemModal: React.FC<ItemModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  existingItem
+  existingItem,
+  currentUser
 }) => {
   const [category, setCategory] = useState<CategoryType>('PV_MODULE');
   const [formData, setFormData] = useState<Partial<InventoryItem>>({
@@ -373,8 +376,11 @@ export const ItemModal: React.FC<ItemModalProps> = ({
         low_stock_alert: isLow
       },
       serial_numbers: formData.serial_numbers || [],
-      image_url: formData.image_url?.trim() || undefined
+      image_url: formData.image_url?.trim() || undefined,
+      added_by: existingItem?.added_by || (currentUser ? `${currentUser.fullName} (${currentUser.role})` : 'System Operator'),
+      added_by_username: existingItem?.added_by_username || currentUser?.username || 'system'
     };
+
 
     onSave(itemToSave);
     onClose();

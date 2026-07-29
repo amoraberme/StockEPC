@@ -21,8 +21,10 @@ import {
   SlidersHorizontal,
   X,
   Eye,
-  Image as ImageIcon
+  Image as ImageIcon,
+  UserCheck
 } from 'lucide-react';
+
 
 interface InventoryDashboardProps {
   items: InventoryItem[];
@@ -591,7 +593,14 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                               </span>
                             )}
                             <span className="text-[10px] text-zinc-400 font-mono whitespace-nowrap">({item.item_id})</span>
+                            {item.added_by && (
+                              <span className="text-[10px] font-medium text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/80 flex items-center gap-1">
+                                <UserCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                <span>Added by: <strong>{item.added_by}</strong></span>
+                              </span>
+                            )}
                           </div>
+
                         </div>
                       </div>
 
@@ -746,7 +755,14 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                               <span className="text-[10px] text-zinc-400 font-mono">
                                 ({item.item_id})
                               </span>
+                              {item.added_by && (
+                                <span className="text-[10px] font-medium text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/80 flex items-center gap-1">
+                                  <UserCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                  <span>Added by: <strong>{item.added_by}</strong></span>
+                                </span>
+                              )}
                             </div>
+
                           </div>
                         </div>
                       </td>

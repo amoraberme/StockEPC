@@ -115,7 +115,7 @@ export default function App() {
   const [serialsItem, setSerialsItem] = useState<InventoryItem | null>(null);
   const [isPrdModalOpen, setIsPrdModalOpen] = useState<boolean>(false);
 
-  // Initial 3-Tier Data Loading: Supabase Cloud -> Local DB API -> LocalStorage / Global Initial Catalog Fallback
+  // Initial 3-Tier Data Loading: Supabase Cloud -> Local DB API -> LocalStorage Cache
   useEffect(() => {
     const loadData = async () => {
       // Tier 1: Fetch from Supabase Cloud DB if configured
@@ -124,11 +124,12 @@ export default function App() {
           const cloudInv = await fetchSupabaseInventory();
           const cloudLogs = await fetchSupabaseAuditLogs();
 
-          if (cloudInv && cloudInv.length > 0) {
+          if (cloudInv !== null) {
             setInventory(cloudInv);
             setAuditLogs(cloudLogs || []);
             localStorage.setItem('solar_epc_inventory', JSON.stringify(cloudInv));
             localStorage.setItem('solar_epc_audit_logs', JSON.stringify(cloudLogs || []));
+            localStorage.setItem('solar_epc_initialized', 'true');
             setIsDbLoaded(true);
             return;
           }
@@ -141,11 +142,12 @@ export default function App() {
       try {
         const res = await fetch('/api/db/all');
         const data = await res.json();
-        if (data.success && Array.isArray(data.inventory) && data.inventory.length > 0) {
+        if (data.success && Array.isArray(data.inventory)) {
           setInventory(data.inventory);
           setAuditLogs(Array.isArray(data.auditLogs) ? data.auditLogs : []);
           localStorage.setItem('solar_epc_inventory', JSON.stringify(data.inventory));
           localStorage.setItem('solar_epc_audit_logs', JSON.stringify(data.auditLogs || []));
+          localStorage.setItem('solar_epc_initialized', 'true');
           setIsDbLoaded(true);
           return;
         }
@@ -153,10 +155,9 @@ export default function App() {
         console.warn('Local DB API unreachable, checking localStorage cache:', err);
       }
 
-      // Tier 3: Browser localStorage Cache or Global Seed Catalog
+      // Tier 3: Browser localStorage Cache
       const savedInv = localStorage.getItem('solar_epc_inventory');
       const savedLogs = localStorage.getItem('solar_epc_audit_logs');
-      const isInitialized = localStorage.getItem('solar_epc_initialized');
       
       let invToUse: InventoryItem[] = [];
       if (savedInv) {
@@ -166,12 +167,6 @@ export default function App() {
             invToUse = parsed;
           }
         } catch (e) {}
-      }
-
-      // Only load initial catalog if device was never initialized before
-      if (!isInitialized && invToUse.length === 0) {
-        invToUse = INITIAL_INVENTORY;
-        localStorage.setItem('solar_epc_initialized', 'true');
       }
 
       let logsToUse: PRDJsonOutput[] = [];
@@ -186,11 +181,13 @@ export default function App() {
       setAuditLogs(logsToUse);
       localStorage.setItem('solar_epc_inventory', JSON.stringify(invToUse));
       localStorage.setItem('solar_epc_audit_logs', JSON.stringify(logsToUse));
+      localStorage.setItem('solar_epc_initialized', 'true');
       setIsDbLoaded(true);
     };
 
     loadData();
   }, []);
+
 
   // Persist to local storage & Local Database API
   useEffect(() => {
@@ -773,7 +770,9 @@ export default function App() {
         onClose={() => setIsItemModalOpen(false)}
         onSave={handleSaveItem}
         existingItem={editingItem}
+        currentUser={currentUser}
       />
+
 
       <SerialNumbersModal
         item={serialsItem}
