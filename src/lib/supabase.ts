@@ -2,8 +2,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { InventoryItem, PRDJsonOutput } from '../types';
 
 const metaEnv = (import.meta as any).env || {};
-const supabaseUrl = metaEnv.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = metaEnv.VITE_SUPABASE_URL || 'https://luapeehrbbivbtunsiip.supabase.co';
+const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1YXBlZWhyYmJpdmJ0dW5zaWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0Njk4MTEsImV4cCI6MjA5MzA0NTgxMX0.HZH0quTzGZzCRceYhbgDDTaG40DWLtvehD_pVukY0S0';
 
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(
@@ -41,8 +41,27 @@ export async function fetchSupabaseInventory(): Promise<InventoryItem[] | null> 
   }
 }
 
+export async function saveSingleSupabaseItem(item: InventoryItem): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('inventory_items')
+      .upsert([item], { onConflict: 'item_id' });
+
+    if (error) {
+      console.warn('Supabase upsert single item error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase save single item error:', err);
+    return false;
+  }
+}
+
 export async function saveSupabaseInventory(inventory: InventoryItem[]): Promise<boolean> {
   if (!supabase) return false;
+  if (inventory.length === 0) return true;
   try {
     const { error } = await supabase
       .from('inventory_items')
@@ -58,6 +77,7 @@ export async function saveSupabaseInventory(inventory: InventoryItem[]): Promise
     return false;
   }
 }
+
 
 export async function deleteSupabaseItem(itemId: string): Promise<boolean> {
   if (!supabase) return false;

@@ -19,12 +19,14 @@ import {
   isSupabaseConfigured, 
   fetchSupabaseInventory, 
   saveSupabaseInventory, 
+  saveSingleSupabaseItem,
   deleteSupabaseItem,
   clearSupabaseInventory,
   fetchSupabaseAuditLogs, 
   insertSupabaseAuditLog,
   clearSupabaseAuditLogs
 } from './lib/supabase';
+
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'inventory' | 'parser' | 'history' | 'json'>('inventory');
@@ -323,6 +325,13 @@ export default function App() {
       return [savedItem, ...prev];
     });
 
+    // Immediately trigger direct save to Supabase Cloud DB
+    if (isSupabaseConfigured()) {
+      saveSingleSupabaseItem(savedItem).catch((err) => {
+        console.warn('Direct Supabase item save failed:', err);
+      });
+    }
+
     const txType = isNew ? 'SKU_ADDED' : 'AUDIT';
     const note = isNew
       ? `Added new item: ${savedItem.brand_manufacturer} ${savedItem.model_number} (${savedItem.item_id}) with initial stock of ${savedItem.stock_levels.current_stock} ${savedItem.uom}.`
@@ -346,7 +355,14 @@ export default function App() {
     };
 
     setAuditLogs((prev) => [logEntry, ...prev]);
+
+    if (isSupabaseConfigured()) {
+      insertSupabaseAuditLog(logEntry).catch((err) => {
+        console.warn('Direct Supabase audit log insert failed:', err);
+      });
+    }
   };
+
 
   const handleDeleteItem = (itemId: string) => {
     const itemToDelete = inventory.find((i) => i.item_id === itemId);
