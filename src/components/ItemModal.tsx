@@ -3,6 +3,7 @@ import { InventoryItem, CategoryType, UOMType, TechnicalSpecs } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { X, Box, Save, Zap, Info, CheckCircle2, Image, Upload, Link as LinkIcon, Camera } from 'lucide-react';
+import { compressImageToWebP } from '../lib/imageCompressor';
 
 interface ItemModalProps {
   isOpen: boolean;
@@ -1031,18 +1032,20 @@ export const ItemModal: React.FC<ItemModalProps> = ({
                       accept="image/*"
                       capture="environment"
                       className="hidden"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          if (file.size > 5 * 1024 * 1024) {
-                            alert('Image file size exceeds 5MB limit.');
-                            return;
+                          try {
+                            const webpDataUrl = await compressImageToWebP(file, 20 * 1024);
+                            setFormData((prev) => ({ ...prev, image_url: webpDataUrl }));
+                          } catch (err) {
+                            console.error('Image compression error:', err);
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setFormData((prev) => ({ ...prev, image_url: reader.result as string }));
+                            };
+                            reader.readAsDataURL(file);
                           }
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setFormData((prev) => ({ ...prev, image_url: reader.result as string }));
-                          };
-                          reader.readAsDataURL(file);
                         }
                       }}
                     />
@@ -1056,18 +1059,20 @@ export const ItemModal: React.FC<ItemModalProps> = ({
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          if (file.size > 5 * 1024 * 1024) {
-                            alert('Image file size exceeds 5MB limit.');
-                            return;
+                          try {
+                            const webpDataUrl = await compressImageToWebP(file, 20 * 1024);
+                            setFormData((prev) => ({ ...prev, image_url: webpDataUrl }));
+                          } catch (err) {
+                            console.error('Image compression error:', err);
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setFormData((prev) => ({ ...prev, image_url: reader.result as string }));
+                            };
+                            reader.readAsDataURL(file);
                           }
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setFormData((prev) => ({ ...prev, image_url: reader.result as string }));
-                          };
-                          reader.readAsDataURL(file);
                         }
                       }}
                     />

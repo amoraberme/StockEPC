@@ -257,7 +257,12 @@ async function startServer() {
   // Vite middleware setup for development vs production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: ['**/data/**', '**/inventory_db.json']
+        }
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);

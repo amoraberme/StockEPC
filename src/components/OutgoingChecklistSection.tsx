@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { runTesseractOcr, parseMgSolarPdfTemplate, MgSolarTemplateOcrResult } from '../lib/tesseractOcr';
+import { compressImageToWebP } from '../lib/imageCompressor';
 import { MgSolarLogo } from './MgSolarLogo';
 import { 
   ClipboardCheck, 
@@ -452,20 +453,44 @@ export const OutgoingChecklistSection: React.FC<OutgoingChecklistSectionProps> =
     }
   };
 
-  const processFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setPreviewImage(base64);
-      setUploadedFileName(file.name);
-      setUploadedFileType(file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/png'));
+  const processFile = async (file: File) => {
+    let base64 = '';
+    let mimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/png');
 
-      processOcrRequest({ 
-        imageBase64: base64,
-        mimeType: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/png')
-      }, file);
-    };
-    reader.readAsDataURL(file);
+    if (file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|webp|heic|bmp)$/i)) {
+      try {
+        base64 = await compressImageToWebP(file, 20 * 1024);
+        mimeType = 'image/webp';
+      } catch (err) {
+        console.warn('Image compression fallback:', err);
+      }
+    }
+
+    if (!base64) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const resultBase64 = event.target?.result as string;
+        setPreviewImage(resultBase64);
+        setUploadedFileName(file.name);
+        setUploadedFileType(mimeType);
+
+        processOcrRequest({ 
+          imageBase64: resultBase64,
+          mimeType: mimeType
+        }, file);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    setPreviewImage(base64);
+    setUploadedFileName(file.name.endsWith('.pdf') ? file.name : file.name.replace(/\.[^/.]+$/, "") + ".webp");
+    setUploadedFileType(mimeType);
+
+    processOcrRequest({ 
+      imageBase64: base64,
+      mimeType: mimeType
+    }, file);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

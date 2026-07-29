@@ -77,7 +77,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
           <div className="flex items-center justify-between pr-8">
             <h3 className="text-lg font-black text-white flex items-center gap-2">
               <Database className="w-5 h-5 text-emerald-400" />
-              <span>Supabase Cloud Integration & Isolated RLS</span>
+              <span>Supabase Cloud Integration & Global Shared Access</span>
             </h3>
             <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${
               isConfigured
@@ -89,7 +89,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
             </span>
           </div>
           <p className="text-xs text-zinc-400">
-            Easily connect your local MG Solar Inventory system to Supabase Postgres with isolated tenant Row Level Security (RLS).
+            Easily connect your MG Solar Inventory system to Supabase Postgres. RLS is disabled so all global operators see 100% of inventory items and audit logs.
           </p>
         </div>
 
@@ -116,7 +116,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
                 <span>2. Supabase Cloud DB</span>
               </div>
               <p className="text-[11px] leading-relaxed opacity-90">
-                {isConfigured ? 'Connected & ready for live cloud queries.' : 'Add VITE_SUPABASE_URL to .env to activate cloud sync.'}
+                {isConfigured ? 'Connected & ready for live global cloud queries.' : 'Add VITE_SUPABASE_URL to .env to activate cloud sync.'}
               </p>
             </div>
           </div>
@@ -126,7 +126,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
             <div className="flex items-center justify-between">
               <label className="font-bold text-white flex items-center gap-1.5 text-xs">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Isolated RLS Migration SQL Script</span>
+                <span>Global Database Migration SQL Script (No RLS)</span>
               </label>
               <Button
                 size="sm"
@@ -135,7 +135,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
                 className="bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-white text-xs h-8 px-3 rounded-xl cursor-pointer"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-400 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
-                {copied ? 'Copied SQL!' : 'Copy RLS Script'}
+                {copied ? 'Copied SQL!' : 'Copy Global SQL'}
               </Button>
             </div>
             <pre className="p-3 bg-zinc-900 border border-zinc-800 rounded-2xl text-[10px] font-mono text-zinc-300 max-h-40 overflow-y-auto leading-tight selection:bg-emerald-900 selection:text-white">
