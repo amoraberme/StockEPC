@@ -15,6 +15,13 @@ import { toast } from './components/ui/use-toast';
 
 import { InventoryItem, PRDJsonOutput, UserProfile, DEFAULT_PROFILES } from './types';
 import { INITIAL_INVENTORY } from './lib/prdSpec';
+import { 
+  isSupabaseConfigured, 
+  fetchSupabaseInventory, 
+  saveSupabaseInventory, 
+  fetchSupabaseAuditLogs, 
+  insertSupabaseAuditLog 
+} from './lib/supabase';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'inventory' | 'parser' | 'history' | 'json'>('inventory');
@@ -105,33 +112,79 @@ export default function App() {
   const [serialsItem, setSerialsItem] = useState<InventoryItem | null>(null);
   const [isPrdModalOpen, setIsPrdModalOpen] = useState<boolean>(false);
 
-  // Initial Fetch from Local Database API
+  // Initial 3-Tier Data Loading: Supabase Cloud -> Local DB API -> LocalStorage / Global Initial Catalog Fallback
   useEffect(() => {
-    fetch('/api/db/all')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          const loadedInv = Array.isArray(data.inventory) ? data.inventory : [];
-          const loadedLogs = Array.isArray(data.auditLogs) ? data.auditLogs : [];
-          setInventory(loadedInv);
-          setAuditLogs(loadedLogs);
-          localStorage.setItem('solar_epc_inventory', JSON.stringify(loadedInv));
-          localStorage.setItem('solar_epc_audit_logs', JSON.stringify(loadedLogs));
+    const loadData = async () => {
+      // Tier 1: Fetch from Supabase Cloud DB if configured
+      if (isSupabaseConfigured()) {
+        try {
+          const cloudInv = await fetchSupabaseInventory();
+          const cloudLogs = await fetchSupabaseAuditLogs();
+
+          if (cloudInv && cloudInv.length > 0) {
+            setInventory(cloudInv);
+            setAuditLogs(cloudLogs || []);
+            localStorage.setItem('solar_epc_inventory', JSON.stringify(cloudInv));
+            localStorage.setItem('solar_epc_audit_logs', JSON.stringify(cloudLogs || []));
+            setIsDbLoaded(true);
+            return;
+          }
+        } catch (err) {
+          console.warn('Supabase cloud fetch error, falling back to local storage:', err);
         }
-        setIsDbLoaded(true);
-      })
-      .catch((err) => {
-        console.warn('Local DB API unreachable, using browser localStorage cache:', err);
-        const savedInv = localStorage.getItem('solar_epc_inventory');
-        if (savedInv) {
-          try { setInventory(JSON.parse(savedInv)); } catch (e) {}
+      }
+
+      // Tier 2: Fetch from Local Server REST API (/api/db/all)
+      try {
+        const res = await fetch('/api/db/all');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.inventory) && data.inventory.length > 0) {
+          setInventory(data.inventory);
+          setAuditLogs(Array.isArray(data.auditLogs) ? data.auditLogs : []);
+          localStorage.setItem('solar_epc_inventory', JSON.stringify(data.inventory));
+          localStorage.setItem('solar_epc_audit_logs', JSON.stringify(data.auditLogs || []));
+          setIsDbLoaded(true);
+          return;
         }
-        const savedLogs = localStorage.getItem('solar_epc_audit_logs');
-        if (savedLogs) {
-          try { setAuditLogs(JSON.parse(savedLogs)); } catch (e) {}
-        }
-        setIsDbLoaded(true);
-      });
+      } catch (err) {
+        console.warn('Local DB API unreachable, checking localStorage cache:', err);
+      }
+
+      // Tier 3: Browser localStorage Cache or Global Seed Catalog
+      const savedInv = localStorage.getItem('solar_epc_inventory');
+      const savedLogs = localStorage.getItem('solar_epc_audit_logs');
+      
+      let invToUse: InventoryItem[] = [];
+      if (savedInv) {
+        try {
+          const parsed = JSON.parse(savedInv);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            invToUse = parsed;
+          }
+        } catch (e) {}
+      }
+
+      // If empty, automatically load the full global hardware seed catalog
+      if (invToUse.length === 0) {
+        invToUse = INITIAL_INVENTORY;
+      }
+
+      let logsToUse: PRDJsonOutput[] = [];
+      if (savedLogs) {
+        try {
+          const parsed = JSON.parse(savedLogs);
+          if (Array.isArray(parsed)) logsToUse = parsed;
+        } catch (e) {}
+      }
+
+      setInventory(invToUse);
+      setAuditLogs(logsToUse);
+      localStorage.setItem('solar_epc_inventory', JSON.stringify(invToUse));
+      localStorage.setItem('solar_epc_audit_logs', JSON.stringify(logsToUse));
+      setIsDbLoaded(true);
+    };
+
+    loadData();
   }, []);
 
   // Persist to local storage & Local Database API
@@ -152,6 +205,13 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ inventory })
     }).catch(() => {});
+
+    // Auto-sync with Supabase Cloud DB if configured
+    if (isSupabaseConfigured()) {
+      saveSupabaseInventory(inventory).catch((err) => {
+        console.warn('Supabase auto-sync inventory failed:', err);
+      });
+    }
   }, [inventory, isDbLoaded]);
 
   useEffect(() => {
@@ -164,6 +224,13 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ log: auditLogs[0] })
       }).catch(() => {});
+
+      // Auto-sync with Supabase Cloud DB if configured
+      if (isSupabaseConfigured()) {
+        insertSupabaseAuditLog(auditLogs[0]).catch((err) => {
+          console.warn('Supabase auto-sync audit log failed:', err);
+        });
+      }
     }
   }, [auditLogs, isDbLoaded]);
 
