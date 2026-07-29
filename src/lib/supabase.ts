@@ -59,6 +59,44 @@ export async function saveSupabaseInventory(inventory: InventoryItem[]): Promise
   }
 }
 
+export async function deleteSupabaseItem(itemId: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('inventory_items')
+      .delete()
+      .eq('item_id', itemId);
+
+    if (error) {
+      console.warn('Supabase delete item error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase delete item error:', err);
+    return false;
+  }
+}
+
+export async function clearSupabaseInventory(): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('inventory_items')
+      .delete()
+      .neq('item_id', 'NON_EXISTENT_GUARD_ID');
+
+    if (error) {
+      console.warn('Supabase clear inventory error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase clear inventory error:', err);
+    return false;
+  }
+}
+
 export async function fetchSupabaseAuditLogs(): Promise<PRDJsonOutput[] | null> {
   if (!supabase) return null;
   try {
@@ -92,6 +130,25 @@ export async function insertSupabaseAuditLog(log: PRDJsonOutput): Promise<boolea
     return true;
   } catch (err) {
     console.warn('Supabase insert log error:', err);
+    return false;
+  }
+}
+
+export async function clearSupabaseAuditLogs(): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('audit_logs')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+
+    if (error) {
+      console.warn('Supabase clear audit logs error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase clear audit logs error:', err);
     return false;
   }
 }

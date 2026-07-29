@@ -19,8 +19,11 @@ import {
   isSupabaseConfigured, 
   fetchSupabaseInventory, 
   saveSupabaseInventory, 
+  deleteSupabaseItem,
+  clearSupabaseInventory,
   fetchSupabaseAuditLogs, 
-  insertSupabaseAuditLog 
+  insertSupabaseAuditLog,
+  clearSupabaseAuditLogs
 } from './lib/supabase';
 
 export default function App() {
@@ -153,20 +156,22 @@ export default function App() {
       // Tier 3: Browser localStorage Cache or Global Seed Catalog
       const savedInv = localStorage.getItem('solar_epc_inventory');
       const savedLogs = localStorage.getItem('solar_epc_audit_logs');
+      const isInitialized = localStorage.getItem('solar_epc_initialized');
       
       let invToUse: InventoryItem[] = [];
       if (savedInv) {
         try {
           const parsed = JSON.parse(savedInv);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             invToUse = parsed;
           }
         } catch (e) {}
       }
 
-      // If empty, automatically load the full global hardware seed catalog
-      if (invToUse.length === 0) {
+      // Only load initial catalog if device was never initialized before
+      if (!isInitialized && invToUse.length === 0) {
         invToUse = INITIAL_INVENTORY;
+        localStorage.setItem('solar_epc_initialized', 'true');
       }
 
       let logsToUse: PRDJsonOutput[] = [];
@@ -247,49 +252,36 @@ export default function App() {
   // Handlers
   const handleResetData = () => {
     if (window.confirm('Clear all hardware items and audit transaction logs permanently?')) {
-      fetch('/api/db/clear-all', { method: 'POST' })
-        .then((res) => res.json())
-        .then(() => {
-          setInventory([]);
-          setAuditLogs([]);
-          localStorage.setItem('solar_epc_inventory', '[]');
-          localStorage.setItem('solar_epc_audit_logs', '[]');
-          toast({
-            type: 'warning',
-            title: 'ALL DATA CLEARED',
-            description: 'Inventory items and audit transaction logs have been wiped.'
-          });
-        })
-        .catch(() => {
-          setInventory([]);
-          setAuditLogs([]);
-          localStorage.setItem('solar_epc_inventory', '[]');
-          localStorage.setItem('solar_epc_audit_logs', '[]');
-        });
+      fetch('/api/db/clear-all', { method: 'POST' }).catch(() => {});
+      if (isSupabaseConfigured()) {
+        clearSupabaseInventory().catch(() => {});
+        clearSupabaseAuditLogs().catch(() => {});
+      }
+      setInventory([]);
+      setAuditLogs([]);
+      localStorage.setItem('solar_epc_inventory', '[]');
+      localStorage.setItem('solar_epc_audit_logs', '[]');
+      localStorage.setItem('solar_epc_initialized', 'true');
+      toast({
+        type: 'warning',
+        title: 'ALL DATA CLEARED',
+        description: 'Inventory items and audit transaction logs have been wiped.'
+      });
     }
   };
 
   const handleClearAuditLogs = () => {
-    fetch('/api/db/audit-logs', { method: 'DELETE' })
-      .then((res) => res.json())
-      .then(() => {
-        setAuditLogs([]);
-        localStorage.setItem('solar_epc_audit_logs', '[]');
-        toast({
-          type: 'warning',
-          title: 'AUDIT TRAIL CLEARED',
-          description: 'All transaction audit trail entries have been cleared.'
-        });
-      })
-      .catch(() => {
-        setAuditLogs([]);
-        localStorage.setItem('solar_epc_audit_logs', '[]');
-        toast({
-          type: 'warning',
-          title: 'AUDIT TRAIL CLEARED',
-          description: 'All transaction audit trail entries have been cleared.'
-        });
-      });
+    fetch('/api/db/audit-logs', { method: 'DELETE' }).catch(() => {});
+    if (isSupabaseConfigured()) {
+      clearSupabaseAuditLogs().catch(() => {});
+    }
+    setAuditLogs([]);
+    localStorage.setItem('solar_epc_audit_logs', '[]');
+    toast({
+      type: 'warning',
+      title: 'AUDIT TRAIL CLEARED',
+      description: 'All transaction audit trail entries have been cleared.'
+    });
   };
 
   const handleDeleteSingleAuditLog = (index: number) => {
@@ -370,6 +362,13 @@ export default function App() {
     fetch(`/api/db/inventory/item/${encodeURIComponent(itemId)}`, {
       method: 'DELETE'
     }).catch(() => {});
+
+    // Explicitly delete from Supabase Cloud DB if configured
+    if (isSupabaseConfigured()) {
+      deleteSupabaseItem(itemId).catch((err) => {
+        console.warn('Supabase delete item error:', err);
+      });
+    }
 
     const logEntry: PRDJsonOutput = {
       inventory_event: {
