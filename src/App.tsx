@@ -202,6 +202,56 @@ export default function App() {
     }
   };
 
+  const handleClearAuditLogs = () => {
+    fetch('/api/db/audit-logs', { method: 'DELETE' })
+      .then((res) => res.json())
+      .then(() => {
+        setAuditLogs([]);
+        localStorage.setItem('solar_epc_audit_logs', '[]');
+        toast({
+          type: 'warning',
+          title: 'AUDIT TRAIL CLEARED',
+          description: 'All transaction audit trail entries have been cleared.'
+        });
+      })
+      .catch(() => {
+        setAuditLogs([]);
+        localStorage.setItem('solar_epc_audit_logs', '[]');
+        toast({
+          type: 'warning',
+          title: 'AUDIT TRAIL CLEARED',
+          description: 'All transaction audit trail entries have been cleared.'
+        });
+      });
+  };
+
+  const handleDeleteSingleAuditLog = (index: number) => {
+    fetch(`/api/db/audit-logs/${index}`, { method: 'DELETE' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.auditLogs)) {
+          setAuditLogs(data.auditLogs);
+          localStorage.setItem('solar_epc_audit_logs', JSON.stringify(data.auditLogs));
+        } else {
+          const updated = [...auditLogs];
+          updated.splice(index, 1);
+          setAuditLogs(updated);
+          localStorage.setItem('solar_epc_audit_logs', JSON.stringify(updated));
+        }
+        toast({
+          type: 'info',
+          title: 'AUDIT ENTRY DELETED',
+          description: 'Selected transaction audit log entry has been removed.'
+        });
+      })
+      .catch(() => {
+        const updated = [...auditLogs];
+        updated.splice(index, 1);
+        setAuditLogs(updated);
+        localStorage.setItem('solar_epc_audit_logs', JSON.stringify(updated));
+      });
+  };
+
   const handleSaveItem = (savedItem: InventoryItem) => {
     const existingIdx = inventory.findIndex((i) => i.item_id === savedItem.item_id);
     const isNew = existingIdx === -1;
@@ -645,6 +695,9 @@ export default function App() {
       {activeTab === 'history' && (
         <TransactionHistoryModal
           logs={auditLogs}
+          currentUser={currentUser}
+          onClearLogs={handleClearAuditLogs}
+          onDeleteLog={handleDeleteSingleAuditLog}
         />
       )}
 

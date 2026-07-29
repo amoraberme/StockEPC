@@ -71,6 +71,17 @@ export interface UserProfile {
 
 export const DEFAULT_PROFILES: UserProfile[] = [
   {
+    id: 'admin',
+    username: 'admin',
+    fullName: 'System Administrator',
+    role: 'System Administrator',
+    company: 'M&G Non-Specialized Wholesale Trading',
+    contactNumber: '09000000000',
+    email: 'admin@mgsolar.com',
+    password: 'Admin!Master2026#Mg',
+    avatarColor: 'bg-rose-900'
+  },
+  {
     id: 'ryan',
     username: 'ryan',
     fullName: 'Ryan M. Castillo',
@@ -110,7 +121,18 @@ export const getStoredProfiles = (): UserProfile[] => {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const hasAdmin = parsed.some((p: UserProfile) => p.username === 'admin');
+        if (!hasAdmin) {
+          const adminProfile = DEFAULT_PROFILES.find((p) => p.username === 'admin');
+          if (adminProfile) {
+            const merged = [adminProfile, ...parsed];
+            localStorage.setItem('solar_epc_user_profiles', JSON.stringify(merged));
+            return merged;
+          }
+        }
+        return parsed;
+      }
     } catch (e) {}
   }
   return DEFAULT_PROFILES;

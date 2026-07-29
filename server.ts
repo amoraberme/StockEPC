@@ -160,11 +160,24 @@ async function startServer() {
     res.json({ success: ok, totalLogs: db.auditLogs.length });
   });
 
-  // 8. Clear Audit Logs (DISABLED - Immutable Security Policy)
+  // 8. Clear All Audit Logs (Admin Permission Enabled)
   app.delete('/api/db/audit-logs', (req, res) => {
-    return res.status(403).json({
-      error: 'Audit logs are immutable under MG SOLAR security protocol and cannot be deleted.'
-    });
+    const db = readLocalDatabase();
+    db.auditLogs = [];
+    const ok = writeLocalDatabase(db);
+    res.json({ success: ok, auditLogs: [] });
+  });
+
+  // Delete Single Audit Log Entry by Index
+  app.delete('/api/db/audit-logs/:index', (req, res) => {
+    const idx = parseInt(req.params.index, 10);
+    const db = readLocalDatabase();
+    if (!Array.isArray(db.auditLogs) || isNaN(idx) || idx < 0 || idx >= db.auditLogs.length) {
+      return res.status(400).json({ error: 'Invalid audit log index.' });
+    }
+    db.auditLogs.splice(idx, 1);
+    const ok = writeLocalDatabase(db);
+    res.json({ success: ok, auditLogs: db.auditLogs });
   });
 
   // 9. Clear All Inventory Items (Preserving Audit Trail)

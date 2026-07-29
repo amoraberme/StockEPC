@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { PRDJsonOutput } from '../types';
+import { UserProfile, PRDJsonOutput } from '../types';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -24,12 +24,16 @@ import {
 
 interface TransactionHistoryProps {
   logs: PRDJsonOutput[];
+  currentUser?: UserProfile | null;
   onClearLogs?: () => void;
+  onDeleteLog?: (index: number) => void;
 }
 
 export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
   logs,
-  onClearLogs
+  currentUser,
+  onClearLogs,
+  onDeleteLog
 }) => {
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [activeFilterTab, setActiveFilterTab] = useState<'ALL' | 'RESTOCK' | 'REMOVED' | 'RESERVATION' | 'SKU_CHANGES'>('ALL');
@@ -140,10 +144,10 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl text-xs font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Immutable Audit Trail Enforced</span>
+              <span>Audit Trail Logs ({logs.length})</span>
             </span>
 
             {logs.length > 0 && (
@@ -155,6 +159,22 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
               >
                 <Download className="w-4 h-4 text-black" />
                 <span>Export Audit JSON</span>
+              </Button>
+            )}
+
+            {(onClearLogs || currentUser?.username === 'admin' || currentUser?.role === 'System Administrator') && logs.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to clear all audit logs permanently?')) {
+                    onClearLogs?.();
+                  }
+                }}
+                className="flex items-center space-x-1.5 font-bold text-xs rounded-xl bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>Clear All Audit Logs</span>
               </Button>
             )}
           </div>
@@ -258,9 +278,25 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
                   )}
                 </div>
 
-                <div className="flex items-center space-x-1.5 text-xs text-zinc-500 font-mono">
-                  <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>{new Date(log.inventory_event.timestamp).toLocaleString()}</span>
+                <div className="flex items-center space-x-3 text-xs text-zinc-500 font-mono">
+                  <div className="flex items-center space-x-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>{new Date(log.inventory_event.timestamp).toLocaleString()}</span>
+                  </div>
+                  {(onDeleteLog || currentUser?.username === 'admin' || currentUser?.role === 'System Administrator') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('Delete this audit log entry?')) {
+                          onDeleteLog?.(idx);
+                        }
+                      }}
+                      className="p-1 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      title="Delete audit entry"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
