@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { UserProfile, PRDJsonOutput } from '../types';
+import { UserProfile, PRDJsonOutput, CategoryType } from '../types';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -8,8 +8,6 @@ import {
   History, 
   Download, 
   Calendar, 
-  ArrowUpRight, 
-  ArrowDownRight, 
   RefreshCw, 
   Bookmark, 
   PackagePlus, 
@@ -19,8 +17,12 @@ import {
   Search,
   Filter,
   FileText,
-  ShieldCheck
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle
 } from 'lucide-react';
+import { validateAndDeduplicateAuditLogs, filterAuditLogs } from '../lib/auditValidator';
 
 interface TransactionHistoryProps {
   logs: PRDJsonOutput[];
@@ -36,16 +38,45 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
   onDeleteLog
 }) => {
   const [searchFilter, setSearchFilter] = useState<string>('');
-  const [activeFilterTab, setActiveFilterTab] = useState<'ALL' | 'RESTOCK' | 'REMOVED' | 'RESERVATION' | 'SKU_CHANGES'>('ALL');
+  const [activeFilterTab, setActiveFilterTab] = useState<'ALL' | 'RESTOCK' | 'REMOVED' | 'RESERVATION' | 'SKU_ADDED' | 'SKU_DELETED' | 'AUDIT'>('ALL');
+  const [selectedCategory, setSelectedCategory] = useState<'ALL' | CategoryType>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
+  const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
+
+  // Step 1: Run Validator & Deduplicator Checker
+  const validationResult = useMemo(() => {
+    return validateAndDeduplicateAuditLogs(logs);
+  }, [logs]);
+
+  // Step 2: Apply Multi-Criteria Filters (Date, Category, TxType, Search)
+  const filteredLogs = useMemo(() => {
+    return filterAuditLogs(validationResult.cleanedLogs, {
+      searchTerm: searchFilter,
+      transactionType: activeFilterTab,
+      category: selectedCategory,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined
+    });
+  }, [validationResult.cleanedLogs, activeFilterTab, selectedCategory, startDate, endDate, searchFilter]);
 
   const handleExportJson = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(logs, null, 2));
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(validationResult.cleanedLogs, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `solar_epc_inventory_logs_${Date.now()}.json`);
+    downloadAnchor.setAttribute('download', `solar_epc_audit_logs_verified_${Date.now()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+  };
+
+  const clearAllFilters = () => {
+    setSearchFilter('');
+    setActiveFilterTab('ALL');
+    setSelectedCategory('ALL');
+    setStartDate('');
+    setEndDate('');
   };
 
   const getTransactionBadge = (type: string) => {
@@ -98,42 +129,9 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
     }
   };
 
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      const txType = log.inventory_event.transaction_type;
-
-      // Filter Tab
-      if (activeFilterTab === 'RESTOCK' && txType !== 'RESTOCK' && txType !== 'INBOUND') return false;
-      if (activeFilterTab === 'REMOVED' && txType !== 'REMOVED' && txType !== 'OUTBOUND') return false;
-      if (activeFilterTab === 'RESERVATION' && txType !== 'RESERVATION') return false;
-      if (activeFilterTab === 'SKU_CHANGES' && txType !== 'SKU_ADDED' && txType !== 'SKU_DELETED') return false;
-
-      // Search Filter
-      if (searchFilter.trim()) {
-        const query = searchFilter.toLowerCase();
-        const eventNotes = log.inventory_event.notes?.toLowerCase() || '';
-        const projId = log.inventory_event.project_id?.toLowerCase() || '';
-        const operator = log.inventory_event.performed_by?.toLowerCase() || '';
-        const matchesItem = log.items?.some(
-          (i) =>
-            i.item_id.toLowerCase().includes(query) ||
-            i.brand_manufacturer.toLowerCase().includes(query) ||
-            i.model_number.toLowerCase().includes(query) ||
-            i.item_description.toLowerCase().includes(query)
-        );
-
-        return eventNotes.includes(query) || projId.includes(query) || operator.includes(query) || matchesItem;
-      }
-
-      return true;
-    });
-  }, [logs, activeFilterTab, searchFilter]);
-
-  const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
-
   return (
     <div id="transaction-history-view" className="space-y-4 font-sans">
-      {/* View Header */}
+      {/* Header & Controls */}
       <Card className="bg-white border-zinc-200 p-4 sm:p-6 space-y-4 rounded-3xl shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -147,12 +145,20 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Audit Checker Status Badge */}
             <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl text-xs font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Audit Trail Logs ({logs.length})</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Verified Logs ({validationResult.cleanedLogs.length})</span>
             </span>
 
-            {logs.length > 0 && (
+            {validationResult.duplicateCountRemoved > 0 && (
+              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl text-[11px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>{validationResult.duplicateCountRemoved} Duplicates Deduplicated</span>
+              </span>
+            )}
+
+            {validationResult.cleanedLogs.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -164,7 +170,7 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
               </Button>
             )}
 
-            {isAdmin && logs.length > 0 && onClearLogs && (
+            {isAdmin && validationResult.cleanedLogs.length > 0 && onClearLogs && (
               <Button
                 variant="outline"
                 size="sm"
@@ -182,8 +188,10 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
           </div>
         </div>
 
-        {/* Filter Bar */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-3 border-t border-zinc-100">
+        {/* Multi-Criteria Filter Controls */}
+        <div className="space-y-3 pt-3 border-t border-zinc-100">
+          
+          {/* Row 1: Transaction Type Filters */}
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setActiveFilterTab('ALL')}
@@ -193,7 +201,7 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
                   : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
               }`}
             >
-              All Movements ({logs.length})
+              All Movements ({validationResult.cleanedLogs.length})
             </button>
             <button
               onClick={() => setActiveFilterTab('RESTOCK')}
@@ -226,37 +234,129 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
               Reservations
             </button>
             <button
-              onClick={() => setActiveFilterTab('SKU_CHANGES')}
+              onClick={() => setActiveFilterTab('SKU_ADDED')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeFilterTab === 'SKU_CHANGES'
+                activeFilterTab === 'SKU_ADDED'
                   ? 'bg-zinc-900 text-white shadow-xs'
                   : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
               }`}
             >
-              Item Created/Deleted
+              SKU Created
+            </button>
+            <button
+              onClick={() => setActiveFilterTab('SKU_DELETED')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeFilterTab === 'SKU_DELETED'
+                  ? 'bg-rose-900 text-white shadow-xs'
+                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+              }`}
+            >
+              SKU Deleted
             </button>
           </div>
 
-          <div className="relative w-full md:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <Input
-              type="text"
-              placeholder="Search audit trail..."
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              className="pl-8 text-xs h-8 bg-zinc-50"
-            />
+          {/* Row 2: Category, Date Range & Free-text Search */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+            
+            {/* Category Dropdown */}
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-0.5">
+                Filter by Category
+              </label>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value as any)}
+                className="w-full bg-zinc-50 border border-zinc-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-1 focus:ring-black"
+              >
+                <option value="ALL">All Hardware Categories</option>
+                <option value="PV_MODULE">Solar PV Module (Panel)</option>
+                <option value="INVERTER">Solar Inverter (On-Grid / Hybrid)</option>
+                <option value="BESS">Battery Storage Bank (LiFePO4)</option>
+                <option value="PROTECTION_BREAKERS">Protection & Circuit Breakers</option>
+                <option value="RACKING">Structural Racking & Hardware</option>
+                <option value="DC_CABLING">Solar DC & Battery Power Cabling</option>
+                <option value="MC4_CONNECTOR">MC4 Connectors & Combiners</option>
+                <option value="CONDUIT_FITTINGS">Electrical Conduits & Pipes</option>
+                <option value="GROUNDING">Grounding & Bonding Gear</option>
+                <option value="FASTENERS">Fasteners & Expansion Bolts</option>
+                <option value="CONSUMABLES">Consumables & Sealants</option>
+                <option value="BOS_SWITCHGEAR">BOS Switchgear & ATS</option>
+              </select>
+            </div>
+
+            {/* From Date */}
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-0.5">
+                From Date
+              </label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-zinc-50 text-xs h-8"
+              />
+            </div>
+
+            {/* To Date */}
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-0.5">
+                To Date
+              </label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-zinc-50 text-xs h-8"
+              />
+            </div>
+
+            {/* Search Input */}
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-0.5">
+                Search Items / Operators
+              </label>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  type="text"
+                  placeholder="Search item, operator..."
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  className="pl-8 text-xs h-8 bg-zinc-50"
+                />
+              </div>
+            </div>
+
           </div>
+
+          {/* Active Filter Indicators */}
+          {(searchFilter || selectedCategory !== 'ALL' || startDate || endDate || activeFilterTab !== 'ALL') && (
+            <div className="flex items-center justify-between pt-2 border-t border-zinc-100 text-xs">
+              <div className="flex items-center space-x-1.5 text-zinc-600">
+                <Filter className="w-3.5 h-3.5 text-black" />
+                <span>Showing <strong>{filteredLogs.length}</strong> of <strong>{validationResult.cleanedLogs.length}</strong> verified audit records</span>
+              </div>
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline cursor-pointer"
+              >
+                Reset All Filters
+              </button>
+            </div>
+          )}
+
         </div>
       </Card>
 
+      {/* Audit Log Entries List */}
       <div className="space-y-4">
         {filteredLogs.length === 0 ? (
           <Card className="bg-white border-zinc-200 p-12 text-center text-zinc-400 space-y-2">
             <History className="w-10 h-10 mx-auto text-zinc-300" />
             <p className="text-sm font-bold text-zinc-700">No matching audit trail records found.</p>
             <p className="text-xs text-zinc-500">
-              Use the inventory action controls or checklist section to generate movement events.
+              Try adjusting your date range, category, or search filters above.
             </p>
           </Card>
         ) : (
@@ -301,7 +401,6 @@ export const TransactionHistoryModal: React.FC<TransactionHistoryProps> = ({
                   )}
                 </div>
               </div>
-
 
               {/* Notes Banner if present */}
               {log.inventory_event.notes && (

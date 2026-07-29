@@ -144,6 +144,8 @@ export async function clearSupabaseInventory(): Promise<boolean> {
   }
 }
 
+import { validateAndDeduplicateAuditLogs } from './auditValidator';
+
 export async function fetchSupabaseAuditLogs(): Promise<PRDJsonOutput[] | null> {
   if (!supabase) return null;
   try {
@@ -156,7 +158,9 @@ export async function fetchSupabaseAuditLogs(): Promise<PRDJsonOutput[] | null> 
       console.warn('Supabase fetch audit logs error:', error.message);
       return null;
     }
-    return data.map((d) => d.log || d) as PRDJsonOutput[];
+    const rawLogs = data.map((d) => d.log || d) as PRDJsonOutput[];
+    const { cleanedLogs } = validateAndDeduplicateAuditLogs(rawLogs);
+    return cleanedLogs;
   } catch (err) {
     console.warn('Supabase audit logs fetch error:', err);
     return null;
@@ -187,7 +191,7 @@ export async function clearSupabaseAuditLogs(): Promise<boolean> {
     const { error } = await supabase
       .from('audit_logs')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000');
+      .gt('created_at', '1970-01-01T00:00:00.000Z');
 
     if (error) {
       console.warn('Supabase clear audit logs error:', error.message);
@@ -199,6 +203,7 @@ export async function clearSupabaseAuditLogs(): Promise<boolean> {
     return false;
   }
 }
+
 
 export const SUPABASE_RLS_SQL_SCRIPT = `-- ============================================================================
 -- MG SOLAR EPC INVENTORY SYSTEM — SUPABASE GLOBAL DATABASE SCRIPT (NO RLS)

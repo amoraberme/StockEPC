@@ -15,6 +15,7 @@ import { toast } from './components/ui/use-toast';
 
 import { InventoryItem, PRDJsonOutput, UserProfile, DEFAULT_PROFILES } from './types';
 import { INITIAL_INVENTORY } from './lib/prdSpec';
+import { validateAndDeduplicateAuditLogs } from './lib/auditValidator';
 import { 
   isSupabaseConfigured, 
   fetchSupabaseInventory, 
@@ -26,6 +27,7 @@ import {
   insertSupabaseAuditLog,
   clearSupabaseAuditLogs
 } from './lib/supabase';
+
 
 
 export default function App() {
@@ -127,10 +129,11 @@ export default function App() {
           const cloudLogs = await fetchSupabaseAuditLogs();
 
           if (cloudInv !== null) {
+            const { cleanedLogs } = validateAndDeduplicateAuditLogs(cloudLogs || []);
             setInventory(cloudInv);
-            setAuditLogs(cloudLogs || []);
+            setAuditLogs(cleanedLogs);
             localStorage.setItem('solar_epc_inventory', JSON.stringify(cloudInv));
-            localStorage.setItem('solar_epc_audit_logs', JSON.stringify(cloudLogs || []));
+            localStorage.setItem('solar_epc_audit_logs', JSON.stringify(cleanedLogs));
             localStorage.setItem('solar_epc_initialized', 'true');
             setIsDbLoaded(true);
             return;
@@ -145,10 +148,11 @@ export default function App() {
         const res = await fetch('/api/db/all');
         const data = await res.json();
         if (data.success && Array.isArray(data.inventory)) {
+          const { cleanedLogs } = validateAndDeduplicateAuditLogs(Array.isArray(data.auditLogs) ? data.auditLogs : []);
           setInventory(data.inventory);
-          setAuditLogs(Array.isArray(data.auditLogs) ? data.auditLogs : []);
+          setAuditLogs(cleanedLogs);
           localStorage.setItem('solar_epc_inventory', JSON.stringify(data.inventory));
-          localStorage.setItem('solar_epc_audit_logs', JSON.stringify(data.auditLogs || []));
+          localStorage.setItem('solar_epc_audit_logs', JSON.stringify(cleanedLogs));
           localStorage.setItem('solar_epc_initialized', 'true');
           setIsDbLoaded(true);
           return;
@@ -179,13 +183,15 @@ export default function App() {
         } catch (e) {}
       }
 
+      const { cleanedLogs } = validateAndDeduplicateAuditLogs(logsToUse);
       setInventory(invToUse);
-      setAuditLogs(logsToUse);
+      setAuditLogs(cleanedLogs);
       localStorage.setItem('solar_epc_inventory', JSON.stringify(invToUse));
-      localStorage.setItem('solar_epc_audit_logs', JSON.stringify(logsToUse));
+      localStorage.setItem('solar_epc_audit_logs', JSON.stringify(cleanedLogs));
       localStorage.setItem('solar_epc_initialized', 'true');
       setIsDbLoaded(true);
     };
+
 
     loadData();
   }, []);
