@@ -33,7 +33,7 @@ export function validateAndDeduplicateAuditLogs(logs: PRDJsonOutput[]): AuditVal
   let invalidEntriesRemoved = 0;
   let duplicateCountRemoved = 0;
 
-  // Step 1: Filter out malformed entries
+  // Step 1: Filter out malformed entries and System Administrator entries
   const validEntries = logs.filter((log) => {
     if (!log || typeof log !== 'object') {
       invalidEntriesRemoved++;
@@ -47,8 +47,14 @@ export function validateAndDeduplicateAuditLogs(logs: PRDJsonOutput[]): AuditVal
       invalidEntriesRemoved++;
       return false;
     }
+    // System Administrator actions do not create/store audit logs
+    const performer = (log.inventory_event.performed_by || '').toLowerCase();
+    if (performer.includes('system administrator') || performer.includes('admin (') || performer === 'admin') {
+      return false;
+    }
     return true;
   });
+
 
   // Step 2: Sort logs chronologically descending (newest first)
   const sorted = [...validEntries].sort((a, b) => {

@@ -381,12 +381,16 @@ export default function App() {
       ]
     };
 
-    setAuditLogs((prev) => [logEntry, ...prev]);
+    const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
 
-    if (isSupabaseConfigured()) {
-      insertSupabaseAuditLog(logEntry).catch((err) => {
-        console.warn('Direct Supabase audit log insert failed:', err);
-      });
+    if (!isAdmin) {
+      setAuditLogs((prev) => [logEntry, ...prev]);
+
+      if (isSupabaseConfigured()) {
+        insertSupabaseAuditLog(logEntry).catch((err) => {
+          console.warn('Direct Supabase audit log insert failed:', err);
+        });
+      }
     }
   };
 
@@ -410,24 +414,28 @@ export default function App() {
       });
     }
 
-    const logEntry: PRDJsonOutput = {
-      inventory_event: {
-        transaction_type: 'SKU_DELETED',
-        notes: `Deleted hardware item ${itemToDelete.item_id} (${itemToDelete.brand_manufacturer} ${itemToDelete.model_number}) from inventory catalog.`,
-        performed_by: operatorTag,
-        timestamp: new Date().toISOString()
-      },
-      items: [
-        {
-          ...itemToDelete,
-          change_quantity: -itemToDelete.stock_levels.current_stock,
-          previous_stock: itemToDelete.stock_levels.current_stock,
-          new_stock: 0
-        }
-      ]
-    };
+    const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
 
-    setAuditLogs((prev) => [logEntry, ...prev]);
+    if (!isAdmin) {
+      const logEntry: PRDJsonOutput = {
+        inventory_event: {
+          transaction_type: 'SKU_DELETED',
+          notes: `Deleted hardware item ${itemToDelete.item_id} (${itemToDelete.brand_manufacturer} ${itemToDelete.model_number}) from inventory catalog.`,
+          performed_by: operatorTag,
+          timestamp: new Date().toISOString()
+        },
+        items: [
+          {
+            ...itemToDelete,
+            change_quantity: -itemToDelete.stock_levels.current_stock,
+            previous_stock: itemToDelete.stock_levels.current_stock,
+            new_stock: 0
+          }
+        ]
+      };
+
+      setAuditLogs((prev) => [logEntry, ...prev]);
+    }
 
     toast({
       type: 'low_stock',
@@ -435,6 +443,7 @@ export default function App() {
       description: `Successfully removed ${itemToDelete.brand_manufacturer} ${itemToDelete.model_number} from catalog.`
     });
   };
+
 
   const handleUpdateStock = (itemId: string, currentStockChange: number, allocatedStockChange: number, customNote?: string) => {
     const itemToUpdate = inventory.find((i) => i.item_id === itemId);
@@ -517,73 +526,81 @@ export default function App() {
       ]
     };
 
-    setAuditLogs((prevLogs) => {
-      // Look for a recent matching log entry created within the last 5 minutes for the same item & transaction type
-      const existingIndex = prevLogs.findIndex((log) => {
-        if (!log.inventory_event || !log.items || log.items.length !== 1) return false;
-        const logItem = log.items[0];
-        if (logItem.item_id !== itemId) return false;
-        if (log.inventory_event.transaction_type !== txType) return false;
-        if (log.inventory_event.performed_by !== operatorTag) return false;
+    const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
 
-        const logTime = new Date(log.inventory_event.timestamp).getTime();
-        return !isNaN(logTime) && (nowMs - logTime) <= FIVE_MINUTES_MS;
-      });
+    if (!isAdmin) {
+      setAuditLogs((prevLogs) => {
+        // Look for a recent matching log entry created within the last 5 minutes for the same item & transaction type
+        const existingIndex = prevLogs.findIndex((log) => {
+          if (!log.inventory_event || !log.items || log.items.length !== 1) return false;
+          const logItem = log.items[0];
+          if (logItem.item_id !== itemId) return false;
+          if (log.inventory_event.transaction_type !== txType) return false;
+          if (log.inventory_event.performed_by !== operatorTag) return false;
 
-      if (existingIndex !== -1) {
-        // Coalesce into existing log
-        const updatedLogs = [...prevLogs];
-        const existingLog = updatedLogs[existingIndex];
-        const existingItem = existingLog.items[0];
+          const logTime = new Date(log.inventory_event.timestamp).getTime();
+          return !isNaN(logTime) && (nowMs - logTime) <= FIVE_MINUTES_MS;
+        });
 
-        const origPreviousStock = existingItem.previous_stock ?? oldStock;
-        const aggregatedChange = (existingItem.change_quantity ?? 0) + (currentStockChange || allocatedStockChange);
-        const aggregatedNewCurrent = newCurrent;
+        if (existingIndex !== -1) {
+          // Coalesce into existing log
+          const updatedLogs = [...prevLogs];
+          const existingLog = updatedLogs[existingIndex];
+          const existingItem = existingLog.items[0];
 
-        let aggregatedAutoNote = '';
-        if (txType === 'RESTOCK') {
-          aggregatedAutoNote = `Restocked +${aggregatedChange} ${itemToUpdate.uom} of ${itemToUpdate.brand_manufacturer} ${itemToUpdate.model_number} (Stock: ${origPreviousStock} ➔ ${aggregatedNewCurrent})`;
-        } else if (txType === 'REMOVED') {
-          aggregatedAutoNote = `Removed ${Math.abs(aggregatedChange)} ${itemToUpdate.uom} of ${itemToUpdate.brand_manufacturer} ${itemToUpdate.model_number} (Stock: ${origPreviousStock} ➔ ${aggregatedNewCurrent})`;
-        } else if (txType === 'RESERVATION') {
-          aggregatedAutoNote = `${aggregatedChange > 0 ? 'Allocated' : 'Unallocated'} ${Math.abs(aggregatedChange)} ${itemToUpdate.uom} for project reservation.`;
-        } else {
-          aggregatedAutoNote = `Stock level adjusted for ${itemToUpdate.brand_manufacturer} ${itemToUpdate.model_number}.`;
+          const origPreviousStock = existingItem.previous_stock ?? oldStock;
+          const aggregatedChange = (existingItem.change_quantity ?? 0) + (currentStockChange || allocatedStockChange);
+          const aggregatedNewCurrent = newCurrent;
+
+          let aggregatedAutoNote = '';
+          if (txType === 'RESTOCK') {
+            aggregatedAutoNote = `Restocked +${aggregatedChange} ${itemToUpdate.uom} of ${itemToUpdate.brand_manufacturer} ${itemToUpdate.model_number} (Stock: ${origPreviousStock} ➔ ${aggregatedNewCurrent})`;
+          } else if (txType === 'REMOVED') {
+            aggregatedAutoNote = `Removed ${Math.abs(aggregatedChange)} ${itemToUpdate.uom} of ${itemToUpdate.brand_manufacturer} ${itemToUpdate.model_number} (Stock: ${origPreviousStock} ➔ ${aggregatedNewCurrent})`;
+          } else if (txType === 'RESERVATION') {
+            aggregatedAutoNote = `${aggregatedChange > 0 ? 'Allocated' : 'Unallocated'} ${Math.abs(aggregatedChange)} ${itemToUpdate.uom} for project reservation.`;
+          } else {
+            aggregatedAutoNote = `Stock level adjusted for ${itemToUpdate.brand_manufacturer} ${itemToUpdate.model_number}.`;
+          }
+
+          const noteText = customNote ? `${aggregatedAutoNote} [${customNote}]` : aggregatedAutoNote;
+
+          const updatedLog: PRDJsonOutput = {
+            ...existingLog,
+            inventory_event: {
+              ...existingLog.inventory_event,
+              notes: noteText,
+              timestamp: nowIso
+            },
+            items: [
+              {
+                ...existingItem,
+                stock_levels: {
+                  ...itemToUpdate.stock_levels,
+                  current_stock: aggregatedNewCurrent,
+                  allocated_stock: newAllocated,
+                  low_stock_alert: isLowAlert
+                },
+                quantity: aggregatedNewCurrent,
+                change_quantity: aggregatedChange,
+                previous_stock: origPreviousStock,
+                new_stock: aggregatedNewCurrent
+              }
+            ]
+          };
+
+          // Move updated coalesced log to top of list
+          updatedLogs.splice(existingIndex, 1);
+          return [updatedLog, ...updatedLogs];
         }
 
-        const noteText = customNote ? `${aggregatedAutoNote} [${customNote}]` : aggregatedAutoNote;
+        return [newLogEntry, ...prevLogs];
+      });
 
-        const updatedLog: PRDJsonOutput = {
-          ...existingLog,
-          inventory_event: {
-            ...existingLog.inventory_event,
-            notes: noteText,
-            timestamp: nowIso
-          },
-          items: [
-            {
-              ...existingItem,
-              stock_levels: {
-                ...itemToUpdate.stock_levels,
-                current_stock: aggregatedNewCurrent,
-                allocated_stock: newAllocated,
-                low_stock_alert: isLowAlert
-              },
-              quantity: aggregatedNewCurrent,
-              change_quantity: aggregatedChange,
-              previous_stock: origPreviousStock,
-              new_stock: aggregatedNewCurrent
-            }
-          ]
-        };
-
-        // Move updated coalesced log to top of list
-        updatedLogs.splice(existingIndex, 1);
-        return [updatedLog, ...updatedLogs];
+      if (isSupabaseConfigured()) {
+        insertSupabaseAuditLog(newLogEntry).catch(() => {});
       }
-
-      return [newLogEntry, ...prevLogs];
-    });
+    }
 
     // Toast Notifications
     if (isLowAlert) {
@@ -630,22 +647,30 @@ export default function App() {
       })
     );
 
-    const logEntry: PRDJsonOutput = {
-      inventory_event: {
-        transaction_type: 'AUDIT',
-        notes: `Updated serial numbers for ${itemToUpdate.brand_manufacturer} ${itemToUpdate.model_number} (${serials.length} active serials registered).`,
-        performed_by: operatorTag,
-        timestamp: new Date().toISOString()
-      },
-      items: [
-        {
-          ...itemToUpdate,
-          serial_numbers: serials
-        }
-      ]
-    };
+    const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
 
-    setAuditLogs((prev) => [logEntry, ...prev]);
+    if (!isAdmin) {
+      const logEntry: PRDJsonOutput = {
+        inventory_event: {
+          transaction_type: 'AUDIT',
+          notes: `Updated serial numbers for ${itemToUpdate.brand_manufacturer} ${itemToUpdate.model_number} (${serials.length} active serials registered).`,
+          performed_by: operatorTag,
+          timestamp: new Date().toISOString()
+        },
+        items: [
+          {
+            ...itemToUpdate,
+            serial_numbers: serials
+          }
+        ]
+      };
+
+      setAuditLogs((prev) => [logEntry, ...prev]);
+
+      if (isSupabaseConfigured()) {
+        insertSupabaseAuditLog(logEntry).catch(() => {});
+      }
+    }
   };
 
   // Commit Transaction Output to Active Inventory
@@ -658,8 +683,17 @@ export default function App() {
       }
     };
 
-    // 1. Add event to Audit Logs
-    setAuditLogs((prev) => [enrichedOutput, ...prev]);
+    const isAdmin = currentUser?.username === 'admin' || currentUser?.role === 'System Administrator';
+
+    // 1. Add event to Audit Logs (if not admin)
+    if (!isAdmin) {
+      setAuditLogs((prev) => [enrichedOutput, ...prev]);
+
+      if (isSupabaseConfigured()) {
+        insertSupabaseAuditLog(enrichedOutput).catch(() => {});
+      }
+    }
+
 
     // 2. Apply stock changes or add new items
     const eventType = enrichedOutput.inventory_event?.transaction_type || 'INBOUND';
