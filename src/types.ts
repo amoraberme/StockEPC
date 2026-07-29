@@ -81,7 +81,7 @@ export const DEFAULT_PROFILES: UserProfile[] = [
     company: 'M&G Non-Specialized Wholesale Trading',
     contactNumber: '09000000000',
     email: 'admin@mgsolar.com',
-    password: 'Admin!Master2026#Mg',
+    password: 'MGAdmin2026!',
     avatarColor: 'bg-rose-900'
   },
   {
@@ -92,7 +92,7 @@ export const DEFAULT_PROFILES: UserProfile[] = [
     company: 'M&G Non-Specialized Wholesale Trading',
     contactNumber: '09352956244',
     email: 'ry.manalo1111@gmail.com',
-    password: 'R3an!Secure2026#Mg',
+    password: 'MGRyan2026!',
     avatarColor: 'bg-blue-900'
   },
   {
@@ -103,7 +103,7 @@ export const DEFAULT_PROFILES: UserProfile[] = [
     company: 'M&G Non-Specialized Wholesale Trading',
     contactNumber: '09299606023',
     email: 'rongavillarenzel.gs@gmail.com',
-    password: 'R3nzel!Shield2026#Mg',
+    password: 'MGRenzel2026!',
     avatarColor: 'bg-emerald-900'
   },
   {
@@ -114,7 +114,7 @@ export const DEFAULT_PROFILES: UserProfile[] = [
     company: 'M&G Non-Specialized Wholesale Trading',
     contactNumber: '09198718747',
     email: 'Santosnoel9999@gmail.com',
-    password: 'N0el!Master2026#Mg',
+    password: 'MGNoel2026!',
     avatarColor: 'bg-amber-900'
   }
 ];
@@ -125,21 +125,20 @@ export const getStoredProfiles = (): UserProfile[] => {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const hasAdmin = parsed.some((p: UserProfile) => p.username === 'admin');
-        if (!hasAdmin) {
-          const adminProfile = DEFAULT_PROFILES.find((p) => p.username === 'admin');
-          if (adminProfile) {
-            const merged = [adminProfile, ...parsed];
-            localStorage.setItem('solar_epc_user_profiles', JSON.stringify(merged));
-            return merged;
-          }
-        }
-        return parsed;
+        // Ensure default passwords are updated
+        const updated = DEFAULT_PROFILES.map((def) => {
+          const existing = parsed.find((p: UserProfile) => p.username === def.username);
+          return existing ? { ...existing, password: def.password } : def;
+        });
+        localStorage.setItem('solar_epc_user_profiles', JSON.stringify(updated));
+        return updated;
       }
     } catch (e) {}
   }
+  localStorage.setItem('solar_epc_user_profiles', JSON.stringify(DEFAULT_PROFILES));
   return DEFAULT_PROFILES;
 };
+
 
 export const updateProfilePasswordInStorage = (userId: string, newPassword: string): UserProfile | null => {
   const profiles = getStoredProfiles();

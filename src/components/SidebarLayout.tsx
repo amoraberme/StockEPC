@@ -1,7 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
-  Menu, 
-  X, 
   Zap, 
   BarChart3, 
   ClipboardCheck, 
@@ -64,14 +62,12 @@ export const SidebarLayout: React.FC<SidebarLayoutProps> = ({
   onOpenSupabaseModal,
   children
 }) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
-
   const activeItemInfo = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
 
   const handleSelectTab = (tab: NavTab) => {
     setActiveTab(tab);
-    setIsMobileMenuOpen(false);
   };
+
 
   return (
     <div id="sidebar-layout-root" className="min-h-screen bg-zinc-50 text-zinc-950 flex flex-col md:flex-row font-sans overflow-x-hidden w-full">
@@ -155,12 +151,6 @@ export const SidebarLayout: React.FC<SidebarLayoutProps> = ({
       {/* Mobile Top Header (hidden on md) */}
       <header id="mobile-top-header" className="md:hidden bg-white border-b border-zinc-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between shadow-2xs">
         <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800"
-          >
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
           <MgSolarLogo size="sm" showText={true} />
         </div>
 
@@ -179,6 +169,7 @@ export const SidebarLayout: React.FC<SidebarLayoutProps> = ({
           </button>
         </div>
       </header>
+
 
       {/* Main Dedicated Content Workspace (Offset on desktop for sidebar) */}
       <div id="main-content-wrapper" className="flex-1 md:pl-64 lg:pl-72 flex flex-col min-w-0 max-w-full min-h-screen overflow-x-hidden">
