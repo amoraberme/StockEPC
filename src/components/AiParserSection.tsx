@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { InventoryItem, PRDJsonOutput, TransactionType } from '../types';
-import { SAMPLE_PRESETS, parseRawTextToPRD, validatePRDJson } from '../lib/prdSpec';
+import { SAMPLE_PRESETS, parseRawTextToPRD, validatePRDJson, isBatteryRelatedItem } from '../lib/prdSpec';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -17,6 +17,7 @@ import {
   Database,
   RefreshCw,
   Zap,
+  ZapOff,
   Sliders,
   BookmarkCheck
 } from 'lucide-react';
@@ -81,6 +82,19 @@ export const AiParserSection: React.FC<AiParserSectionProps> = ({
     onCommitTransaction(parsedOutput);
     setCommittedSuccess(true);
     setTimeout(() => setCommittedSuccess(false), 4000);
+  };
+
+  const handleExcludeBatteryFromPrd = () => {
+    if (!parsedOutput) return;
+    const filteredItems = parsedOutput.items.filter((item) => !isBatteryRelatedItem(item));
+    setParsedOutput({
+      ...parsedOutput,
+      inventory_event: {
+        ...parsedOutput.inventory_event,
+        notes: `${parsedOutput.inventory_event.notes || ''} [Note: Battery Subsystem Package Excluded]`
+      },
+      items: filteredItems
+    });
   };
 
   // Validation output
@@ -216,6 +230,18 @@ export const AiParserSection: React.FC<AiParserSectionProps> = ({
 
               {parsedOutput && (
                 <div className="flex items-center space-x-2">
+                  {parsedOutput.items.some((i) => isBatteryRelatedItem(i)) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExcludeBatteryFromPrd}
+                      className="h-7 text-[11px] px-2.5 bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 cursor-pointer"
+                      title="Exclude battery module, DC MCCB breaker, and battery cabling from PRD items"
+                    >
+                      <ZapOff className="w-3.5 h-3.5 mr-1 text-amber-700" />
+                      <span>Exclude Battery Package</span>
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"

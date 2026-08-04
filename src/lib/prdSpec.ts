@@ -32,6 +32,56 @@ export const PRD_CONFIG = {
   prdVersion: '1.0.4 - Solar BOS Specialist'
 };
 
+/**
+ * Utility function to check if a hardware item or line item belongs to the Battery System package
+ * (e.g. Battery Storage Module BESS, DC MCCB for battery, or Battery Cabling).
+ */
+export function isBatteryRelatedItem(item: {
+  category?: string;
+  model_number?: string;
+  item_description?: string;
+  brand_manufacturer?: string;
+} | null | undefined): boolean {
+  if (!item) return false;
+  const cat = (item.category || '').toUpperCase();
+  const model = (item.model_number || '').toLowerCase();
+  const desc = (item.item_description || '').toLowerCase();
+
+  // 1. Direct BESS Category Match
+  if (cat === 'BESS') return true;
+
+  // 2. Battery & Switchgear Model Number Keywords
+  if (
+    model.includes('mg-bat') ||
+    model.includes('mg-dcmccb') ||
+    model.includes('bat-flex') ||
+    model.includes('bess') ||
+    model.includes('us5000') ||
+    model.includes('hvs-') ||
+    model.includes('ef-powerkit') ||
+    model.includes('ef-bess')
+  ) {
+    return true;
+  }
+
+  // 3. Description & Hardware Name Keywords
+  if (
+    desc.includes('battery') ||
+    desc.includes('bess') ||
+    desc.includes('dc mccb') ||
+    desc.includes('battery isolator') ||
+    desc.includes('battery cable') ||
+    desc.includes('battery wire') ||
+    desc.includes('storage module') ||
+    desc.includes('lfp storage') ||
+    desc.includes('lithium battery')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export const INITIAL_INVENTORY: InventoryItem[] = [
   // 1. MG SOLAR Material Dispatch & Packing Checklist Items (DOC #: MG-CL-MG-QT-260714085517)
   {

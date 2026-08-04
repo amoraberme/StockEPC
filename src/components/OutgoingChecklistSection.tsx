@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { runTesseractOcr, parseMgSolarPdfTemplate, MgSolarTemplateOcrResult } from '../lib/tesseractOcr';
 import { compressImageToWebP } from '../lib/imageCompressor';
 import { MgSolarLogo } from './MgSolarLogo';
+import { isBatteryRelatedItem } from '../lib/prdSpec';
 import { 
   ClipboardCheck, 
   PackageMinus, 
@@ -42,7 +43,9 @@ import {
   Building2,
   CheckSquare,
   Square,
-  Link
+  Link,
+  Battery,
+  ZapOff
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -250,6 +253,12 @@ export const OutgoingChecklistSection: React.FC<OutgoingChecklistSectionProps> =
   // Modal / Review State
   const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
 
+  // Battery System Exclude & Prompt State
+  const [isBatteryPromptModalOpen, setIsBatteryPromptModalOpen] = useState<boolean>(false);
+  const [pendingRemoveItemId, setPendingRemoveItemId] = useState<string | null>(null);
+  const [lastExcludedBatteryItems, setLastExcludedBatteryItems] = useState<SelectedDispatchItem[] | null>(null);
+  const [notificationText, setNotificationText] = useState<string | null>(null);
+
   // OCR State
   const [isOcrExpanded, setIsOcrExpanded] = useState<boolean>(false);
   const [ocrEngine, setOcrEngine] = useState<'tesseract' | 'ai' | 'hybrid'>('tesseract');
@@ -350,8 +359,61 @@ export const OutgoingChecklistSection: React.FC<OutgoingChecklistSectionProps> =
     setDispatchItems((prev) => prev.map((di) => ({ ...di, verified: verify })));
   };
 
+  // Battery System Package Management
+  const batteryItemsCount = dispatchItems.filter((di) => isBatteryRelatedItem(di.item)).length;
+
+  const handleExcludeBatteryPackage = () => {
+    const batteryItems = dispatchItems.filter((di) => isBatteryRelatedItem(di.item));
+    if (batteryItems.length === 0) {
+      setNotificationText('No battery package items found in the active checklist.');
+      setTimeout(() => setNotificationText(null), 4000);
+      return;
+    }
+
+    setLastExcludedBatteryItems(batteryItems);
+    setDispatchItems((prev) => prev.filter((di) => !isBatteryRelatedItem(di.item)));
+    setNotificationText(
+      `Excluded ${batteryItems.length} Battery System component(s): Battery Bank, DC MCCB & Battery Cables.`
+    );
+    setIsBatteryPromptModalOpen(false);
+    setPendingRemoveItemId(null);
+  };
+
+  const handleRestoreBatteryPackage = () => {
+    if (!lastExcludedBatteryItems || lastExcludedBatteryItems.length === 0) return;
+
+    const existingIds = new Set(dispatchItems.map((di) => di.item.item_id));
+    const itemsToRestore = lastExcludedBatteryItems.filter((di) => !existingIds.has(di.item.item_id));
+
+    setDispatchItems((prev) => [...prev, ...itemsToRestore]);
+    setLastExcludedBatteryItems(null);
+    setNotificationText('Restored Battery System package items to active checklist.');
+    setTimeout(() => setNotificationText(null), 4000);
+  };
+
   const handleRemoveItem = (itemId: string) => {
+    const target = dispatchItems.find((di) => di.item.item_id === itemId);
+    if (target && isBatteryRelatedItem(target.item)) {
+      const otherBatteryItems = dispatchItems.filter(
+        (di) => di.item.item_id !== itemId && isBatteryRelatedItem(di.item)
+      );
+
+      if (otherBatteryItems.length > 0) {
+        setPendingRemoveItemId(itemId);
+        setIsBatteryPromptModalOpen(true);
+        return;
+      }
+    }
+
     setDispatchItems((prev) => prev.filter((di) => di.item.item_id !== itemId));
+  };
+
+  const handleConfirmRemoveSingleItem = () => {
+    if (pendingRemoveItemId) {
+      setDispatchItems((prev) => prev.filter((di) => di.item.item_id !== pendingRemoveItemId));
+    }
+    setIsBatteryPromptModalOpen(false);
+    setPendingRemoveItemId(null);
   };
 
   const handleLoadPreset = (preset: typeof PRESET_CHECKLISTS[0]) => {
@@ -655,18 +717,41 @@ export const OutgoingChecklistSection: React.FC<OutgoingChecklistSectionProps> =
   return (
     <div className="space-y-6 w-full max-w-full min-w-0 font-sans pb-12 print:p-0 print:m-0">
       {/* View Mode Controls Bar */}
-      <div className="flex items-center justify-between gap-3 bg-white border border-zinc-200 rounded-2xl p-2.5 shadow-2xs print:hidden">
-        <div className="flex items-center space-x-2 text-xs font-bold text-zinc-950 px-2">
-          <ClipboardCheck className="w-4 h-4 text-amber-600" />
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-zinc-200 rounded-2xl p-2.5 shadow-2xs print:hidden">
+        <div className="flex items-center space-x-2 text-xs font-bold text-zinc-950 px-2 flex-wrap gap-y-1">
+          <ClipboardCheck className="w-4 h-4 text-amber-600 shrink-0" />
           <span>Active Outgoing Checklist</span>
           {dispatchItems.length > 0 && (
             <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full font-mono">
               {dispatchItems.length} items
             </span>
           )}
+          {batteryItemsCount > 0 ? (
+            <span className="bg-purple-100 text-purple-900 border border-purple-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full font-mono flex items-center gap-1">
+              <Battery className="w-3 h-3 text-purple-700" />
+              Battery Package ({batteryItemsCount})
+            </span>
+          ) : (
+            <span className="bg-zinc-100 text-zinc-600 border border-zinc-200 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono flex items-center gap-1">
+              <ZapOff className="w-3 h-3 text-zinc-400" />
+              Grid-Tied (No Battery)
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExcludeBatteryPackage}
+            disabled={batteryItemsCount === 0}
+            className="text-xs font-extrabold h-8 px-3 bg-amber-50 text-amber-950 border-amber-300 hover:bg-amber-100 disabled:opacity-40 cursor-pointer rounded-xl flex items-center gap-1.5 shadow-2xs"
+            title="Exclude battery bank module, DC MCCB breaker, and battery cabling together"
+          >
+            <ZapOff className="w-3.5 h-3.5 text-amber-700" />
+            <span>Exclude Battery Package {batteryItemsCount > 0 ? `(${batteryItemsCount})` : ''}</span>
+          </Button>
+
           <div className="flex items-center bg-zinc-100 p-1 rounded-xl border border-zinc-200">
             <button
               type="button"
@@ -696,6 +781,34 @@ export const OutgoingChecklistSection: React.FC<OutgoingChecklistSectionProps> =
           </div>
         </div>
       </div>
+
+      {/* Notification / Exclusion Banner */}
+      {notificationText && (
+        <div className="bg-amber-500/15 border border-amber-500/40 p-3 rounded-2xl text-amber-950 flex items-center justify-between text-xs animate-in fade-in print:hidden">
+          <div className="flex items-center space-x-2 font-bold min-w-0">
+            <ZapOff className="w-4 h-4 text-amber-700 shrink-0" />
+            <span className="truncate">{notificationText}</span>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            {lastExcludedBatteryItems && lastExcludedBatteryItems.length > 0 && (
+              <button
+                type="button"
+                onClick={handleRestoreBatteryPackage}
+                className="text-xs font-black bg-amber-500 text-black px-2.5 py-1 rounded-xl hover:bg-amber-400 cursor-pointer transition-all shadow-2xs"
+              >
+                Restore Battery Package
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setNotificationText(null)}
+              className="text-zinc-500 hover:text-black p-1 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* OCR SCANNER SECTION (Collapsible Banner) */}
       {isOcrExpanded && (
@@ -1872,6 +1985,85 @@ export const OutgoingChecklistSection: React.FC<OutgoingChecklistSectionProps> =
               >
                 <CheckCircle2 className="w-4 h-4 mr-1.5" />
                 Confirm & Deduct Stock ({itemsToDeductCount} Items)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BATTERY SYSTEM EXCLUDE PROMPT MODAL */}
+      {isBatteryPromptModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-200 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="bg-zinc-950 text-white p-5 space-y-1 relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBatteryPromptModalOpen(false);
+                  setPendingRemoveItemId(null);
+                }}
+                className="absolute right-4 top-4 text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                  <ZapOff className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">Exclude Battery Package</h3>
+                  <p className="text-[11px] text-zinc-400">Related battery system components detected</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-3 text-xs text-zinc-800">
+              <p className="leading-relaxed font-medium">
+                You are removing a battery system component. Your active checklist contains <strong>{batteryItemsCount}</strong> related battery package items (Module, Protection MCCB, Cabling):
+              </p>
+              
+              <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3 space-y-1.5 font-mono text-[11px]">
+                <div className="font-extrabold text-amber-950 border-b border-amber-200 pb-1 flex items-center justify-between">
+                  <span>Battery Subsystem Package:</span>
+                  <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-bold">Grouped Subsystem</span>
+                </div>
+                {dispatchItems
+                  .filter((di) => isBatteryRelatedItem(di.item))
+                  .map((di) => (
+                    <div key={di.item.item_id} className="flex items-center justify-between text-zinc-900">
+                      <span className="truncate max-w-[240px] font-bold">
+                        • {di.item.item_description}
+                      </span>
+                      <span className="font-extrabold text-amber-950 shrink-0">{di.dispatchQty} {di.item.uom}</span>
+                    </div>
+                  ))}
+              </div>
+
+              <p className="text-zinc-500 text-[11px] pt-1">
+                Would you like to exclude the <strong>entire Battery Subsystem Package</strong> (Battery Module + DC MCCB + Battery Cables) or remove only the single selected item?
+              </p>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="p-4 border-t border-zinc-200 bg-zinc-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleConfirmRemoveSingleItem}
+                className="text-xs font-bold border-zinc-300 text-zinc-800 hover:bg-zinc-100 cursor-pointer rounded-xl"
+              >
+                Remove Only Selected Item
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={handleExcludeBatteryPackage}
+                className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs cursor-pointer px-4 rounded-xl shadow-md flex items-center justify-center gap-1.5"
+              >
+                <ZapOff className="w-4 h-4" />
+                Exclude Entire Battery Package ({batteryItemsCount})
               </Button>
             </div>
           </div>
